@@ -2,13 +2,13 @@
 
 ## Introduction to `einx` and `einops`
 
-In this section, we are going to talk about features shared by `einops` and `einx` so
-this section is mostly useful for people that are not familiar with `einops` yet.
-
 Einx is a library inspired by the popular [einops](https://github.com/arogozhnikov/einops)
 library (with more functionalities). Their goal is to provide a simple and
 intuitive way to manipulate tensors in a flexible and readable manner using the
 same lines of code for all tensors backends (Numpy, Pytorch, Jax, Tensorflow, ...).
+
+In this section, we are going to talk about features shared by `einops` and `einx` so
+this section is mostly useful for people that are not familiar with `einops` yet.
 
 For instance you want to apply a dense map in an image and rearranging the output
 to a shape that fit a pytorch batch. You may want to do something like this:
@@ -34,15 +34,15 @@ batch = torch.unsqueeze(img, dim=0)  # shape: (1, 16, 224, 224)
 ```
 
 Now it's better but still verbose and not easy to maintain if the shape will
-change. Plus you have to remember all those pytorch functions that can be a pain.
-And their names are not necessarily the same in other backends leading to even more
+change in the future. Plus you have to remember all those pytorch functions that can be a pain.
+Their names are not necessarily the same across all the backends (numpy, pytorch, jax, ...) leading to even more
 functions to remember.
 
-That's where `einx` (and `einops`) comes in. They add general functions to manipulate
+That's where `einx` (and `einops`) comes in. They add general functions to manipulate tensors
 that take in input the full description of the inputs and outputs shapes as strings.
-So the comments you made to track the shapes are now directly in th code itself,
-guaranteeing that the code is always up to date and readable. Plus the functions
-are always the same across backends. Here it is your code with `einx`:
+The comments you wrote to track the shapes are now directly in th code itself,
+guaranteeing that the code is always up to date and readable. Plus the functions names and usage
+are unified for all the backends. Here it is your code with `einx`:
 
 ```python
 dense = torch.randn(3, 16)
@@ -54,7 +54,7 @@ img = einx.rearrange("h w dim -> 1 dim h w", img)
 Here you can see that full description of the input and output shapes.
 You can even give more descriptive names to the axes. Once you get familiar with
 the descriptions and the tensor manipulation, you can be even more efficient
-and write the code like this:
+and write the code directly like this:
 
 ```python
 dense = torch.randn(3, 16)
@@ -85,7 +85,7 @@ batch = torch.randn(16, 32)
 batches = einx.rearrange("(n_batch bsize) dim -> n_batch bsize dim", batch, n_batch=4, bsize=4)
 ```
 
-Only passes because the input length is exactly 4 * 4.
+Only passes because the input length is exactly 4 * 4 here.
 
 Now it's time to present `einx` specifically. Most of the available functions
 are presented in the *Functionalities* section. The next section will
@@ -94,7 +94,7 @@ present the specificity of `einx` compared to `einops` regarding the description
 ## Description tricks
 
 `einx` add more tensor operations than `einops` but also add some functionalities
-to make the description more readable and flexible.
+to make the description more readable and/or flexible.
 
 ### Marked axis with brackets
 
@@ -160,7 +160,7 @@ you just don't have the choice.
 
 The ellipsis can be used in two ways:
 
-- Unnamed ellipsis: ` ...` (the ellipsis is preceded by a space). This works like
+- Unnamed ellipsis: " ..." (the ellipsis is preceded by a space). This works like
   the ellipsis in `einops`.
 
 In this case, the ellipsis replaces all the axis found in the input shape that are
@@ -175,7 +175,7 @@ Size([2, 3])
 Size([5])
 ```
 
-- Named ellipsis: `<expr>...` (the ellipsis is preceded by an expression without space)
+- Named ellipsis: "{expr}..." (the ellipsis is preceded by an expression without space)
 
 In this case, the expression (name, parenthesis, ...) is used to all the axis in the
 corresponding position but with different names from each other. For instance, the
@@ -188,6 +188,51 @@ Size([6, 4, 3, 2, 2, 2, 3])
 >>> einx.rearrange("(a1 b1) (a2 b2) (a3 b3) c -> (a1 a2 a3) (b1 b2 b3) c", x, b1=2, b2=2, b3=2)
 Size([6, 4, 3, 2, 2, 2, 3])
 ```
+
+### "->" in brackets (advanced)
+
+"->" in brackets can be used to specify marked axis in input and output shapes when other
+axis are shared. For instance the following calls are equivalent:
+
+```python
+>>> x = torch.randn(2, 3, 4)
+>>> einx.mean("a b [c] -> a b [1]", x).shape
+Size([2, 3, 1])
+>>> einx.mean("a b [c -> 1]", x).shape
+Size([2, 3, 1])
+```
+
+It's also possible to use the "," to specify marked axis for multiple inputs.
+For instance the following calls are equivalent:
+
+```python
+>>> x = torch.randn(2, 3, 4)
+>>> y = torch.randn(2, 3)
+>>> einx.dot("a b [c, ->]", x, y).shape
+Size([2, 3, 3])
+>>> einx.dot("a b [c], a b [] -> a b", x, y).shape
+Size([2, 3, 3])
+```
+
+## Explicit operations
+
+It's always possible to get the explicit operations that are used to
+compute the `einx` operations. Just add "graph=True" to the call of the function
+and print the result.
+
+```python
+>>> x = torch.randn(2, 3, 4)
+>>> einx.mean("a b c -> c a", x, graph=True)
+import torch
+def op0(i0):
+    x0 = torch.mean(i0, axis=1)
+    x1 = torch.permute(x0, (1, 0))
+    return x1
+```
+
+As you can see, the operations are described by the code itself that is used to
+compute the operation using the backend's API. This is useful to understand
+what is going on under the hood in some cases.
 
 ## Functionalities
 
