@@ -1,2 +1,6 @@
 # Test file
 main.py
+# Documentation
+docs/_build
+# Env
+**.egg-info
